@@ -1,0 +1,473 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Pocket Dice</title>
+<meta name="description" content="A minimalist dice roller for tabletop RPGs.">
+<meta name="theme-color" content="#eceef2" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#111317" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Dice">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="manifest" href="manifest.json">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Inter:wght@400;500;600&display=swap">
+<style>
+/* One-screen tool: big result on top, dice pad pinned to the bottom within thumb reach. */
+:root {
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  box-sizing: border-box;
+  --bg: #eceef2;
+  --surface: #ffffff;
+  --fg: #15171c;
+  --muted: #687080;
+  --line: #d6dae2;
+  --accent: #b3261e;
+  --on-accent: #ffffff;
+  --display: "Bricolage Grotesque", "Inter", system-ui, sans-serif;
+  --body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111317; --surface: #1b1e24; --fg: #eceef2; --muted: #8a92a0;
+    --line: #2a2f38; --accent: #ec5a4a; --on-accent: #16090a; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111317; --surface: #1b1e24; --fg: #eceef2; --muted: #8a92a0;
+  --line: #2a2f38; --accent: #ec5a4a; --on-accent: #16090a; color-scheme: dark;
+}
+
+html, body { height: 100%; margin: 0; }
+*, *::before, *::after { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--fg); font-family: var(--body); font-size: 15px;
+  -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none;
+  overflow-x: hidden;
+}
+.app {
+  height: 100%; max-width: 480px; margin: 0 auto; box-sizing: border-box;
+  display: flex; flex-direction: column; gap: 14px;
+  padding-block: 12px 16px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+button {
+  font: inherit; color: inherit; background: none; border: 0; cursor: pointer;
+  touch-action: manipulation;
+}
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Result */
+.result {
+  flex: 1; min-height: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 6px; text-align: center;
+  overflow-x: clip;
+}
+.expr {
+  font-size: 13px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--muted); min-height: 1.2em;
+}
+.total {
+  font-family: var(--display); font-weight: 700; line-height: .9;
+  font-size: clamp(80px, 27vw, 150px); font-variant-numeric: tabular-nums;
+  letter-spacing: -.03em; transition: color .2s;
+}
+.total.rolling { color: var(--line); }
+.total.crit { color: var(--accent); }
+.total.fumble { color: var(--muted); }
+.total.empty { color: var(--line); }
+.tag { font-size: 13px; font-weight: 600; color: var(--accent); min-height: 1.2em; letter-spacing: .02em; }
+.tag.fumble { color: var(--muted); }
+
+/* Dice tray: each die drawn as its own shape */
+.parts {
+  display: flex; flex-wrap: wrap; justify-content: center; align-items: center;
+  gap: 10px 14px; padding: 18px 8px 4px; max-width: 100%; box-sizing: border-box;
+  --s: 84px;
+}
+.parts.sm { --s: 64px; gap: 8px 10px; }
+.parts.many { max-height: 232px; overflow-y: auto; }
+.dw { display: flex; flex-direction: column; align-items: center; gap: 2px; perspective: 400px; }
+.dw > small { font-size: 11px; font-weight: 500; color: var(--muted); letter-spacing: .04em; }
+.ds { position: relative; width: var(--s); height: var(--s); display: block; }
+.ds svg { width: 100%; height: 100%; display: block; overflow: visible; }
+.ds svg > * { fill: var(--surface); stroke: var(--muted); stroke-width: 3; stroke-linejoin: round; }
+.ds svg > .f { fill: none; stroke: var(--line); stroke-width: 2; }
+.dn {
+  position: absolute; left: 50%; top: var(--ny, 50%); transform: translate(-50%, -50%);
+  font-family: var(--display); font-weight: 700; line-height: 1;
+  font-size: calc(var(--s) * .44); font-variant-numeric: tabular-nums; color: var(--fg);
+}
+.dn.long { font-size: calc(var(--s) * .32); }
+.dw.max .ds svg > :first-child { stroke: var(--accent); }
+.dw.max .dn { color: var(--accent); }
+.dw.drop { opacity: .4; }
+.dw.drop .ds { transform: scale(.78); }
+.dw.drop .dn { text-decoration: line-through; text-decoration-thickness: 3px; }
+.modchip {
+  font-family: var(--display); font-weight: 700; font-size: 38px; color: var(--fg);
+  font-variant-numeric: tabular-nums; align-self: center; padding-bottom: 14px;
+}
+
+/* History */
+.history {
+  display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; min-height: 34px;
+}
+.history::-webkit-scrollbar { display: none; }
+.history button {
+  flex: none; display: flex; gap: 6px; align-items: baseline;
+  padding: 7px 12px; border-radius: 999px; border: 1px solid var(--line);
+  font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.history button b { color: var(--fg); font-weight: 600; }
+.history .hint { font-size: 13px; color: var(--muted); align-self: center; }
+
+/* Controls */
+.row { display: flex; gap: 10px; align-items: center; justify-content: space-between; }
+.seg {
+  display: flex; background: var(--surface); border: 1px solid var(--line);
+  border-radius: 12px; padding: 3px;
+}
+.seg button {
+  padding: 8px 12px; border-radius: 9px; font-size: 13px; font-weight: 500; color: var(--muted);
+}
+.seg button[aria-pressed="true"] { background: var(--fg); color: var(--bg); }
+.mod {
+  display: flex; align-items: center; background: var(--surface);
+  border: 1px solid var(--line); border-radius: 12px;
+}
+.mod button { width: 40px; height: 38px; font-size: 20px; color: var(--muted); }
+.mod output {
+  min-width: 36px; text-align: center; font-weight: 600; font-variant-numeric: tabular-nums;
+}
+.pad { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.die {
+  position: relative; height: 62px; border-radius: 14px;
+  background: var(--surface); border: 1px solid var(--line);
+  font-family: var(--display); font-weight: 500; font-size: 22px;
+  transition: transform .08s, border-color .15s;
+}
+.die:active { transform: scale(.95); }
+.die.on { border-color: var(--fg); }
+.die .n {
+  position: absolute; top: 5px; right: 7px; font-family: var(--body);
+  font-size: 11px; font-weight: 600; color: var(--accent); font-variant-numeric: tabular-nums;
+}
+.clear { font-family: var(--body); font-size: 14px; font-weight: 500; color: var(--muted); }
+.roll {
+  height: 60px; border-radius: 16px; background: var(--accent); color: var(--on-accent);
+  font-size: 17px; font-weight: 600; letter-spacing: .02em; transition: transform .08s, opacity .2s;
+}
+.roll:active { transform: scale(.98); }
+.roll:disabled { opacity: .35; cursor: default; }
+
+@keyframes pop { from { transform: scale(.86); opacity: .4 } to { transform: none; opacity: 1 } }
+.total.pop { animation: pop .22s ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  .total.pop { animation: none; }
+  .die, .roll { transition: none; }
+}
+</style>
+
+</head>
+<body>
+<main class="app">
+  <section class="result" id="result" aria-live="polite">
+    <div class="expr" id="expr"></div>
+    <div class="total" id="total">–</div>
+    <div class="tag" id="tag"></div>
+    <div class="parts" id="parts"></div>
+  </section>
+
+  <div class="history" id="history"></div>
+
+  <div class="row">
+    <div class="seg" role="group" aria-label="d20 mode">
+      <button id="m-normal" data-mode="normal">Normal</button>
+      <button id="m-adv" data-mode="adv">Adv</button>
+      <button id="m-dis" data-mode="dis">Dis</button>
+    </div>
+    <div class="mod" aria-label="Modifier">
+      <button id="mod-dn" aria-label="Lower modifier">−</button>
+      <output id="mod">+0</output>
+      <button id="mod-up" aria-label="Raise modifier">+</button>
+    </div>
+  </div>
+
+  <div class="pad" id="pad"></div>
+
+  <button class="roll" id="roll">Roll</button>
+</main>
+
+<script>
+(() => {
+  const DICE = [4, 6, 8, 10, 12, 20, 100];
+  const $ = id => document.getElementById(id);
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // Die silhouettes (viewBox 0 0 100 100); class "f" = faint facet lines
+  const KITE = '<polygon points="50,3 95,42 50,97 5,42"/><path class="f" d="M5,42L50,60L95,42M50,60V97"/>';
+  const SHAPES = {
+    4: '<polygon points="50,5 96,89 4,89"/>',
+    6: '<rect x="8" y="8" width="84" height="84" rx="14"/>',
+    8: '<polygon points="50,2 97,50 50,98 3,50"/><path class="f" d="M3,50H97"/>',
+    10: KITE,
+    12: '<polygon points="50,3 96,37 78,94 22,94 4,37"/><polygon class="f" points="50,22 74,40 65,70 35,70 26,40"/>',
+    20: '<polygon points="50,2 93,26 93,74 50,98 7,74 7,26"/><polygon class="f" points="50,20 79,68 21,68"/>',
+    100: KITE
+  };
+  const NUM_Y = { 4: '63%', 10: '43%', 100: '43%' };
+
+  // How each shape tumbles: d4 thumps over in thirds, d6 tumbles, d8 flips,
+  // d10/d100 spin, d12 rolls in from the side, d20 tumbles longest.
+  const deg = a => `rotate(${a}deg)`;
+  const MOTION = {
+    4:  { dur: 620, flick: 150, ease: 'ease-in-out',
+          spin: s => [0, 120, 240, 360].map(a => ({ transform: deg(s * a) })) },
+    6:  { dur: 760, flick: 95, ease: 'cubic-bezier(.3,.6,.3,1)',
+          spin: s => [{ transform: deg(0) }, { transform: deg(s * 630), offset: .7 }, { transform: deg(s * 720) }] },
+    8:  { dur: 820, flick: 85, ease: 'cubic-bezier(.25,.7,.3,1)',
+          spin: s => [{ transform: 'rotateY(0deg) rotate(0deg)' },
+                      { transform: `rotateY(540deg) rotate(${s * 30}deg)`, offset: .7 },
+                      { transform: 'rotateY(720deg) rotate(0deg)' }] },
+    10: { dur: 860, flick: 70, ease: 'cubic-bezier(.15,.75,.25,1)',
+          spin: s => [{ transform: deg(0) }, { transform: deg(s * 1080) }] },
+    12: { dur: 900, flick: 70, ease: 'cubic-bezier(.2,.7,.3,1)',
+          spin: s => [{ transform: `translateX(${-s * 40}px) rotate(${-s * 720}deg)` },
+                      { transform: 'translateX(0px) rotate(0deg)' }] },
+    20: { dur: 1050, flick: 50, ease: 'cubic-bezier(.2,.7,.25,1)',
+          spin: s => [{ transform: 'rotate(0deg) scale(.6)' },
+                      { transform: `rotate(${s * 900}deg) scale(1.12)`, offset: .6 },
+                      { transform: `rotate(${s * 1080}deg) scale(1)` }] },
+    100: { dur: 920, flick: 60, ease: 'cubic-bezier(.15,.75,.25,1)',
+          spin: s => [{ transform: deg(0) }, { transform: deg(s * 1260) }] }
+  };
+  const BOUNCE = [
+    { transform: 'translateY(-26px)', opacity: 0, offset: 0 },
+    { opacity: 1, offset: .12 },
+    { transform: 'translateY(0px)', offset: .38 },
+    { transform: 'translateY(-10px)', offset: .56 },
+    { transform: 'translateY(0px)', offset: .74 },
+    { transform: 'translateY(-3px)', offset: .86 },
+    { transform: 'translateY(0px)', opacity: 1, offset: 1 }
+  ];
+
+  let state = { pool: { 20: 1 }, mod: 0, mode: 'normal', history: [] };
+  try {
+    const saved = JSON.parse(localStorage.getItem('pocket-dice') || 'null');
+    if (saved && saved.pool) state = Object.assign(state, saved);
+  } catch (e) {}
+  const save = () => { try { localStorage.setItem('pocket-dice', JSON.stringify(state)); } catch (e) {} };
+  let rolling = false;
+
+  // Fair random 1..n (rejection sampling, no modulo bias)
+  function rnd(n) {
+    const a = new Uint32Array(1), lim = Math.floor(4294967296 / n) * n;
+    do { crypto.getRandomValues(a); } while (a[0] >= lim);
+    return (a[0] % n) + 1;
+  }
+
+  const count = () => DICE.reduce((s, d) => s + (state.pool[d] || 0), 0);
+  const modStr = m => (m > 0 ? '+' : '−') + Math.abs(m);
+  function exprOf(pool, mod) {
+    const s = DICE.filter(d => pool[d]).map(d => `${pool[d]}d${d}`).join(' + ');
+    return (s || '') + (mod ? ` ${mod > 0 ? '+' : '−'} ${Math.abs(mod)}` : '');
+  }
+
+  // Build dice pad
+  const pad = $('pad');
+  DICE.forEach(d => {
+    const b = document.createElement('button');
+    b.className = 'die'; b.id = 'd' + d; b.dataset.d = d;
+    b.setAttribute('aria-label', 'Add d' + d);
+    b.innerHTML = `d${d}<span class="n"></span>`;
+    b.onclick = () => { state.pool[d] = (state.pool[d] || 0) + 1; save(); renderControls(); };
+    pad.appendChild(b);
+  });
+  const clr = document.createElement('button');
+  clr.className = 'die clear'; clr.id = 'clear'; clr.textContent = 'Clear';
+  clr.onclick = () => { state.pool = {}; state.mod = 0; save(); renderControls(); };
+  pad.appendChild(clr);
+
+  function renderControls() {
+    DICE.forEach(d => {
+      const b = $('d' + d), n = state.pool[d] || 0;
+      b.classList.toggle('on', n > 0);
+      b.querySelector('.n').textContent = n ? '×' + n : '';
+    });
+    $('mod').textContent = state.mod ? modStr(state.mod) : '+0';
+    document.querySelectorAll('.seg button').forEach(b =>
+      b.setAttribute('aria-pressed', String(b.dataset.mode === state.mode)));
+    $('roll').disabled = count() === 0;
+    const e = exprOf(state.pool, state.mod);
+    $('roll').textContent = e ? 'Roll ' + e : 'Roll';
+  }
+
+  // One die in the tray
+  function makeDie(d, v, kept) {
+    const w = document.createElement('span');
+    w.className = 'dw' + (kept ? '' : ' drop');
+    w.innerHTML = `<span class="ds"><svg viewBox="0 0 100 100" aria-hidden="true">${SHAPES[d]}</svg>` +
+      `<span class="dn${d === 100 ? ' long' : ''}" style="--ny:${NUM_Y[d] || '50%'}">${v}</span></span><small>d${d}</small>`;
+    return { el: w, spin: w.firstChild, num: w.querySelector('.dn'), d, final: v, kept };
+  }
+
+  function buildTray(r) {
+    const tray = $('parts');
+    tray.innerHTML = '';
+    const dice = [];
+    r.parts.forEach(p => {
+      dice.push(makeDie(p.d, p.v, true));
+      if (p.drop) dice.push(makeDie(p.d, p.drop, false));
+    });
+    tray.className = 'parts' + (dice.length > 6 ? ' sm' : '') + (dice.length > 10 ? ' many' : '');
+    dice.forEach(x => tray.appendChild(x.el));
+    if (r.mod) {
+      const m = document.createElement('span');
+      m.className = 'modchip'; m.textContent = modStr(r.mod);
+      tray.appendChild(m);
+    }
+    return dice;
+  }
+
+  function markMax(dice) {
+    dice.forEach(x => x.el.classList.toggle('max', x.kept && x.final === x.d));
+  }
+
+  function settle(r, animate) {
+    const t = $('total');
+    t.className = 'total';
+    t.textContent = r.total;
+    const tag = $('tag');
+    tag.className = 'tag'; tag.textContent = '';
+    if (r.parts.length === 1 && r.parts[0].d === 20) {
+      const v = r.parts[0].v;
+      if (v === 20) { t.classList.add('crit'); tag.textContent = 'Natural 20'; }
+      if (v === 1) { t.classList.add('fumble'); tag.classList.add('fumble'); tag.textContent = 'Natural 1'; }
+    }
+    if (animate && !reduced) { void t.offsetWidth; t.classList.add('pop'); }
+  }
+
+  function showExpr(r) {
+    $('expr').textContent = r
+      ? r.expr + (r.parts.some(p => p.drop) ? (r.mode === 'adv' ? ' · adv' : ' · dis') : '')
+      : 'Tap dice to build a roll';
+  }
+
+  // Tumble every die, flickering faces that slow down before landing.
+  function animateDice(r, dice) {
+    return new Promise(done => {
+      const t = $('total');
+      t.className = 'total rolling'; $('tag').textContent = '';
+      const items = dice.map((x, i) => {
+        const m = MOTION[x.d], s = Math.random() < .5 ? -1 : 1;
+        const delay = i * 55 + Math.random() * 40;
+        const dur = m.dur * (0.9 + Math.random() * 0.2);
+        x.el.animate(BOUNCE, { duration: dur, delay, easing: 'linear', fill: 'backwards' });
+        x.spin.animate(m.spin(s), { duration: dur, delay, easing: m.ease, fill: 'backwards' });
+        return Object.assign(x, { delay, dur, flick: m.flick, next: 0, cur: 1 + Math.floor(Math.random() * x.d), fin: false });
+      });
+      const start = performance.now();
+      (function tick(now) {
+        let busy = false, sum = r.mod;
+        items.forEach(it => {
+          const e = now - start - it.delay;
+          if (e < it.dur) {
+            busy = true;
+            if (e >= it.next) {
+              it.cur = 1 + Math.floor(Math.random() * it.d);
+              it.num.textContent = it.cur;
+              it.next = e + it.flick * (1 + 2.5 * Math.max(0, e) / it.dur);
+            }
+          } else if (!it.fin) {
+            it.fin = true; it.cur = it.final; it.num.textContent = it.final;
+            if (it.kept && it.final === it.d) it.el.classList.add('max');
+          }
+          if (it.kept) sum += it.cur;
+        });
+        t.textContent = sum;
+        if (busy) requestAnimationFrame(tick); else done();
+      })(start);
+    });
+  }
+
+  async function renderResult(r, animate) {
+    showExpr(r);
+    if (!r) {
+      const t = $('total'); t.className = 'total empty'; t.textContent = '–';
+      $('tag').textContent = ''; $('parts').innerHTML = '';
+      return;
+    }
+    const dice = buildTray(r);
+    if (animate && !reduced) await animateDice(r, dice);
+    markMax(dice);
+    settle(r, animate);
+  }
+
+  function renderHistory() {
+    const h = $('history');
+    h.innerHTML = '';
+    if (!state.history.length) { h.innerHTML = '<span class="hint">Recent rolls appear here. Tap one to roll it again.</span>'; return; }
+    state.history.forEach((r, i) => {
+      const b = document.createElement('button');
+      b.id = 'h' + i;
+      b.innerHTML = `${r.expr}<b>${r.total}</b>`;
+      b.onclick = () => {
+        if (rolling) return;
+        state.pool = Object.assign({}, r.pool); state.mod = r.mod; save(); renderControls(); roll();
+      };
+      h.appendChild(b);
+    });
+    h.scrollLeft = 0;
+  }
+
+  async function roll() {
+    if (!count() || rolling) return;
+    rolling = true;
+    const parts = [];
+    DICE.forEach(d => {
+      for (let i = 0; i < (state.pool[d] || 0); i++) {
+        if (d === 20 && state.mode !== 'normal') {
+          const a = rnd(20), b = rnd(20);
+          const keep = state.mode === 'adv' ? Math.max(a, b) : Math.min(a, b);
+          parts.push({ d, v: keep, drop: keep === a ? b : a });
+        } else parts.push({ d, v: rnd(d) });
+      }
+    });
+    const r = {
+      pool: Object.assign({}, state.pool), mod: state.mod, mode: state.mode, parts,
+      expr: exprOf(state.pool, state.mod),
+      total: parts.reduce((s, p) => s + p.v, 0) + state.mod
+    };
+    state.last = r;
+    try { navigator.vibrate && navigator.vibrate(8); } catch (e) {}
+    await renderResult(r, true);
+    state.history = [{ expr: r.expr, total: r.total, pool: r.pool, mod: r.mod }, ...state.history].slice(0, 12);
+    save();
+    renderHistory();
+    try { navigator.vibrate && navigator.vibrate(15); } catch (e) {}
+    rolling = false;
+  }
+
+  $('roll').onclick = roll;
+  $('result').onclick = roll;
+  $('mod-up').onclick = () => { state.mod++; save(); renderControls(); };
+  $('mod-dn').onclick = () => { state.mod--; save(); renderControls(); };
+  document.querySelectorAll('.seg button').forEach(b =>
+    b.onclick = () => { state.mode = b.dataset.mode; save(); renderControls(); });
+
+  renderControls();
+  renderHistory();
+  if (state.last && state.last.parts) renderResult(state.last, false);
+  else if (count()) roll();
+  else renderResult(null);
+})();
+</script>
+</body>
+</html>

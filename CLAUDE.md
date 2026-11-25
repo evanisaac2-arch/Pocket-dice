@@ -8,9 +8,9 @@ Owner: Evan Isaac (evanisaac2-arch). Not a full-time developer: explain in plain
 3. Do this in the same pull request as the first working version.
 
 ## Project
-- **What it is:** [FILL IN]
-- **Where it runs / how it's published:** [FILL IN — e.g. a Claude artifact, Cloudflare Pages/Workers, local only]
-- **Live link:** [FILL IN]
+- **What it is:** Pocket Dice — a minimalist phone dice roller for tabletop RPGs (d4–d100, modifier, advantage/disadvantage, animated rolls, recent-roll history). A single static page: `index.html` (all CSS + JS inline), plus `manifest.json` and icons so it can be added to a phone's home screen. No build step, no server, no secrets.
+- **Where it runs / how it's published:** Cloudflare Pages, connected to this repo's `main` branch, so merging a pull request publishes the site. (A Claude artifact copy also exists for quick previews; this repo is the master.)
+- **Live link:** [PLACEHOLDER — Cloudflare Pages address, e.g. https://pocket-dice.pages.dev, once set up]
 
 ## Source of truth and workflow
 - **This GitHub repo is the master copy.** Don't let the live version drift from it: if something is changed elsewhere, bring the change back here.
