@@ -1,0 +1,30 @@
+# Secrets — never commit
+.env
+.env.*
+.dev.vars
+*.pem
+*.key
+secrets.*
+
+# Large media — keep in Google Drive / cloud storage
+media/
+*.mp4
+*.mov
+*.m4v
+*.webm
+*.mkv
+*.avi
+
+# Tool and build clutter
+node_modules/
+.wrangler/
+dist/
+build/
+.venv/
+__pycache__/
+*.log
+
+# OS clutter
+.DS_Store
+Thumbs.db
+desktop.ini
